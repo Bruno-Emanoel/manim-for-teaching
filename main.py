@@ -5,15 +5,19 @@ class Main(Scene):
     def construct(self):
         love_lupulus = Problem(self, [1,2,3,4,5],[5,4,3,2,1])
         love_lupulus.solve()
+        self.wait(2)
+        self.clear()
+        # love_lupulus = Problem(self, [12,4,53,1,2,32,1],[21,34,54,64,1,1,1])
+        # love_lupulus.solve()
 
 class ItemList:
     group: VGroup
     data: List[Square]
     texts: List[Text]
-    def __init__(self,group=VGroup(),data=[],texts=[]):
-        self.group = group
-        self.data = data
-        self.texts = texts
+    def __init__(self,group=None,data=None,texts=None):
+        self.group = group or VGroup()
+        self.data = data or []
+        self.texts = texts or []
 
 class Problem:
     # constantes
@@ -51,7 +55,27 @@ class Problem:
         )
         self.draw_dp()
         self.write_lists_names()
-        self.scene.wait(2)
+        self.scene.wait(1)
+        n = len(self.drinks_up)
+        # dp.first[n-1] = drinks.first[n-1]
+        self.mov_drink_to_dp(True,n-1,True,n-1)
+        # dp.second[n-1] = drinks.second[n-1]
+        self.mov_drink_to_dp(False,n-1,False,n-1)
+        self.mov_drink_to_dp(False,n-2,False,n-2)
+        self.transition_dp(
+            is_origin_up=True,is_destiny_up=False,
+            origin=n-1,destiny=n-2
+        )
+        self.mov_drink_to_dp(True,n-2,True,n-2)
+        self.transition_dp(
+            is_origin_up=False,is_destiny_up=True,
+            origin=n-1,destiny=n-2
+        )
+        i = n-3
+        while(i>=0):
+            self.iterate_dp(True, i)
+            self.iterate_dp(False, i)
+            i-=1
 
     def solve_naive(self):
         pass
@@ -68,6 +92,7 @@ class Problem:
 
         group_up = VGroup()
         square_list_up: List[Square] = []
+        text_list_up: List[Text] = []
         i = len(self.drinks_up)
         for num in self.drinks_up:
             square = Square(
@@ -78,10 +103,12 @@ class Problem:
             text = Text(str(num)).move_to(square.get_center())
             group_up.add(square, text)
             square_list_up.append(square)
+            text_list_up.append(text)
             i-=1
         
         group_down = VGroup()
         square_list_down: List[Square] = []
+        text_list_down: List[Text] = []
         i = len(self.drinks_down)
         for num in self.drinks_down:
             result = VGroup()
@@ -94,12 +121,15 @@ class Problem:
             result.add(square, text)
             group_down.add(result)
             square_list_down.append(square)
+            text_list_down.append(text)
             i-=1
 
         self.squares_up.group = group_up
         self.squares_up.data = square_list_up
+        self.squares_up.texts = text_list_up
         self.squares_down.group = group_down
         self.squares_down.data = square_list_down
+        self.squares_down.texts = text_list_down
         
         canvas.play(group_up.animate, group_down.animate) 
 
@@ -147,12 +177,11 @@ class Problem:
             Text('d1').next_to(self.squares_up.data[0]),
             Text('d2').next_to(self.squares_down.data[0]),
             Text('dp1').next_to(self.dp_square_up.data[0]),
-            Text('dp2').next_to(self.dp_square_down.data[0]).shift(DOWN),
+            Text('dp2').next_to(self.dp_square_down.data[0]),
         )
         for name in list_names:
             name.shift(LEFT*3)
         self.scene.add(*list_names)
-
 
     def access_drink(self, up: bool, index: int) -> int:
         squares = self.squares_up.data if up else self.squares_down.data
@@ -163,7 +192,6 @@ class Problem:
         self.scene.play(squares[index].animate.set_color(self.HIGHLIGHT_COLOR))
         return self.drinks_up[index] if up else self.drinks_down[index]
     
-    
     def unaccess_drink(self, up: bool, index: int) -> int:
         squares = self.squares_up.data if up else self.squares_down.data
         # erro em caso de index fora de range
@@ -172,16 +200,120 @@ class Problem:
         self.scene.play(squares[index].animate.set_color(self.SQUARE_COLOR))
         return self.drinks_up[index] if up else self.drinks_down[index]
 
-    def arc_arrow_to(self, is_origin_up: bool, origin: int, is_destiny_up: bool, destiny: int) -> ArcBetweenPoints:
-        origin_squares = self.squares_up.data if is_origin_up else self.squares_down.data
-        destiny_squares = self.squares_up.data if is_destiny_up else self.squares_down.data
+    def access_dp(self, up: bool, index: int) -> int:
+        squares = self.dp_square_up.data if up else self.dp_square_down.data
+
+        # erro em caso de index fora de range
+        check_valid_index(squares,index, 'dp_squares_up' if squares is self.squares_up else 'dp_squares_down')
+
+        self.scene.play(squares[index].animate.set_color(self.HIGHLIGHT_COLOR))
+        return self.dp_up[index] if up else self.dp_down[index]
+        
+    def unaccess_dp(self, up: bool, index: int) -> int:
+        squares = self.dp_square_up.data if up else self.dp_square_down.data
+        # erro em caso de index fora de range
+        check_valid_index(squares,index, 'dp_squares_up' if squares==self.squares_up else 'dp_squares_down')
+
+        self.scene.play(squares[index].animate.set_color(self.DP_COLOR))
+        return self.dp_up[index] if up else self.dp_down[index]
+
+    def mov_drink_to_dp(self, is_origin_up: bool, origin: int, is_destiny_up: bool, destiny: int):
+        origin_squares = self.squares_up if is_origin_up else self.squares_down
+        destiny_squares = self.dp_square_up if is_destiny_up else self.dp_square_down
+
+        check_valid_index(origin_squares.data, origin, 'origin_squares')
+        check_valid_index(destiny_squares.data, destiny, 'destiny_squares')
+
+        new_text = origin_squares.texts[origin].copy()
+        self.access_dp(is_destiny_up, destiny)
+        self.scene.play(new_text.animate.move_to(destiny_squares.data[destiny].get_center()))
+        self.scene.play(Transform(
+            destiny_squares.texts[destiny],
+            new_text,
+        ))
+        self.scene.remove(new_text)
+        self.unaccess_dp(is_destiny_up,destiny)
+        origin_drinks = self.drinks_up if is_origin_up else self.drinks_down
+        destiny_dp = self.dp_up if is_destiny_up else self.dp_down
+        destiny_dp[destiny] = origin_drinks[origin]
+        self.scene.wait()
+        pass
+
+    def transition_dp(self, is_origin_up: bool, origin: int, is_destiny_up: bool, destiny: int):
+        origin_squares = self.dp_square_up if is_origin_up else self.dp_square_down
+        destiny_squares = self.dp_square_up if is_destiny_up else self.dp_square_down
+        origin_dp = self.dp_up if is_origin_up else self.dp_down
+        destiny_dp = self.dp_up if is_destiny_up else self.dp_down
+
+        check_valid_index(origin_squares.data, origin, 'origin_squares')
+        check_valid_index(destiny_squares.data, destiny, 'destiny_squares')
+
+        first_text = origin_squares.texts[origin].copy()
+        new_text = Text(str(destiny_dp[destiny]+origin_dp[origin])).move_to(destiny_squares.data[destiny].get_center())
+        self.access_dp(is_destiny_up, destiny)
+        self.scene.play(
+            first_text.animate.move_to(destiny_squares.data[destiny].get_center())
+        )
+        self.scene.play(Transform(
+            destiny_squares.texts[destiny],
+            new_text,
+        ))
+        self.scene.remove(new_text,first_text)
+        self.unaccess_dp(is_destiny_up,destiny)
+        
+        destiny_dp[destiny] += origin_dp[origin]
+        self.scene.wait()
+
+        pass
+
+    def iterate_dp(self,is_destiny_up, destiny):
+        origin_dp = self.dp_down if is_destiny_up else self.dp_up
+
+        self.mov_drink_to_dp(is_destiny_up,destiny,is_destiny_up,destiny)
+        arc1 = self.arc_arrow_to(is_destiny_up,destiny,not is_destiny_up, destiny+1,is_drink=False)
+        arc2 = self.arc_arrow_to(is_destiny_up,destiny,not is_destiny_up, destiny+2,is_drink=False)
+
+        if origin_dp[destiny+1] > origin_dp[destiny+2]:
+            origin = destiny+1
+            self.delete_arc_arrow(arc2)
+            self.access_dp(not is_destiny_up, origin)
+            self.transition_dp(
+                is_origin_up= not is_destiny_up, is_destiny_up= is_destiny_up,
+                origin=origin, destiny=destiny
+            )
+            self.delete_arc_arrow(arc1)
+            self.unaccess_dp(not is_destiny_up, origin)
+        else:
+            origin = destiny+2
+            self.delete_arc_arrow(arc1)
+            self.access_dp(not is_destiny_up, origin)
+            self.transition_dp(
+                is_origin_up= not is_destiny_up, is_destiny_up= is_destiny_up,
+                origin=origin, destiny=destiny
+            )
+            self.delete_arc_arrow(arc2)
+            self.unaccess_dp(not is_destiny_up, origin)
+        
+
+
+    def arc_arrow_to(self, is_origin_up: bool, origin: int, is_destiny_up: bool, destiny: int, is_drink = True) -> ArcBetweenPoints:
+        origin_squares = (
+            (self.squares_up.data if is_origin_up else self.squares_down.data)
+            if is_drink
+            else (self.dp_square_up.data if is_origin_up else self.dp_square_down.data)
+        )
+        destiny_squares = (
+            (self.squares_up.data if is_destiny_up else self.squares_down.data)
+            if is_drink
+            else (self.dp_square_up.data if is_destiny_up else self.dp_square_down.data)
+        )
 
         check_valid_index(origin_squares,origin)
         origin_square = origin_squares[origin]
         check_valid_index(destiny_squares,destiny)
         destiny_square = destiny_squares[destiny]
 
-        direction = 1 if (is_origin_up and not is_destiny_up) or (origin < destiny) else -1
+        direction = -1 if (is_origin_up and not is_destiny_up) or (origin < destiny) else 1
         start = origin_square.get_center()
         end = destiny_square.get_center()
 
@@ -198,6 +330,7 @@ class Problem:
 
     def delete_arc_arrow(self,arc: ArcBetweenPoints):
         self.scene.play(Uncreate(arc))
+
 # funções utilitárias
 def check_valid_index(arr: list, index: int, arr_name: str = ''):
     if index < 0 or index >= len(arr):
