@@ -8,7 +8,7 @@ Tendo os requisitos instalados, rode o seguinte comando em seu terminal:
 
 ```bash
 git clone https://github.com/Bruno-Emanoel/manim-for-teaching.git
-cd .\\manim-for-teaching\\
+cd .\manim-for-teaching\
 uv add manim
 ```
 
