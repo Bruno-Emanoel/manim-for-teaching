@@ -1,5 +1,4 @@
-from manim import *
-from manim.utils.file_ops import open_file as open_media_file 
+from manim import *  # type: ignore
 from typing import List
 
 class Main(Scene):
@@ -10,14 +9,18 @@ class Main(Scene):
 class ItemList:
     group: VGroup
     data: List[Square]
-    def __init__(self,group=VGroup(),data=[]):
+    texts: List[Text]
+    def __init__(self,group=VGroup(),data=[],texts=[]):
         self.group = group
         self.data = data
+        self.texts = texts
 
 class Problem:
     # constantes
     SQUARE_LENGTH = 1
+    SQUARE_OPACITY = .6
     SQUARE_COLOR = PINK
+    DP_COLOR = BLUE
     HIGHLIGHT_COLOR = GREEN
     ARROW_COLOR = YELLOW
 
@@ -39,13 +42,16 @@ class Problem:
         self.squares_up = ItemList()
         self.squares_down = ItemList()
         self.setup_visuals()
-        self.arc_arrow_to(True,3,False,1)
-        scene.wait()
-        self.unaccess_drink(True,3)
-        scene.wait()
+        self.init_dp()
         
     def solve(self):
-        pass
+        self.scene.play(
+            self.squares_up.group.animate.shift(UP*2),
+            self.squares_down.group.animate.shift(UP*2)
+        )
+        self.draw_dp()
+        self.write_lists_names()
+        self.scene.wait(2)
 
     def solve_naive(self):
         pass
@@ -67,7 +73,7 @@ class Problem:
             square = Square(
                 color=self.SQUARE_COLOR,
                 fill_opacity=0.6,
-                side_length=1
+                side_length=self.SQUARE_LENGTH
             ).shift(LEFT*i,RIGHT*len(self.drinks_up)/2,UP*.5)
             text = Text(str(num)).move_to(square.get_center())
             group_up.add(square, text)
@@ -82,7 +88,7 @@ class Problem:
             square = Square(
                 color=self.SQUARE_COLOR,
                 fill_opacity=0.6,
-                side_length=1
+                side_length=self.SQUARE_LENGTH
             ).shift(LEFT*i,RIGHT*len(self.drinks_down)/2,DOWN*.5)
             text = Text(str(num)).move_to(square.get_center())
             result.add(square, text)
@@ -96,6 +102,57 @@ class Problem:
         self.squares_down.data = square_list_down
         
         canvas.play(group_up.animate, group_down.animate) 
+
+    def init_dp(self):
+        self.dp_up = [-1]*len(self.drinks_up)
+        self.dp_down = [-1]*len(self.drinks_down)
+
+    def draw_dp(self):
+        self.dp_square_up = ItemList()
+        self.dp_square_down = ItemList()
+        up = self.dp_square_up
+        down = self.dp_square_down
+        i = len(self.dp_up)
+        for num in self.dp_up:
+            square = Square(
+                color=self.DP_COLOR,
+                fill_opacity=self.SQUARE_OPACITY,
+                side_length=self.SQUARE_LENGTH,
+            ).shift(LEFT*i,RIGHT*len(self.drinks_down)/2,DOWN*.5)
+            up.data.append(square)
+
+            text = Text(str(num)).move_to(up.data[-1].get_center())
+            up.texts.append(text)
+            up.group.add(square,text)
+            i-=1
+
+        i = len(self.dp_down)
+        for num in self.dp_down:
+            square = Square(
+                color=self.DP_COLOR,
+                fill_opacity=self.SQUARE_OPACITY,
+                side_length=self.SQUARE_LENGTH,
+            ).shift(LEFT*i,RIGHT*len(self.drinks_down)/2,DOWN*1.5)
+            down.data.append(square)
+
+            text = Text(str(num)).move_to(down.data[-1].get_center())
+            down.texts.append(text)
+            down.group.add(square,text)
+            i-=1
+        
+        self.scene.play(up.group.animate, down.group.animate)
+
+    def write_lists_names(self):
+        list_names = (
+            Text('d1').next_to(self.squares_up.data[0]),
+            Text('d2').next_to(self.squares_down.data[0]),
+            Text('dp1').next_to(self.dp_square_up.data[0]),
+            Text('dp2').next_to(self.dp_square_down.data[0]).shift(DOWN),
+        )
+        for name in list_names:
+            name.shift(LEFT*3)
+        self.scene.add(*list_names)
+
 
     def access_drink(self, up: bool, index: int) -> int:
         squares = self.squares_up.data if up else self.squares_down.data
@@ -139,7 +196,8 @@ class Problem:
         self.scene.play(Create(arc))
         return arc
 
-
+    def delete_arc_arrow(self,arc: ArcBetweenPoints):
+        self.scene.play(Uncreate(arc))
 # funções utilitárias
 def check_valid_index(arr: list, index: int, arr_name: str = ''):
     if index < 0 or index >= len(arr):
